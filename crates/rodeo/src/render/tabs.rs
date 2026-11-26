@@ -68,7 +68,7 @@ fn datetime(format: &str) -> String {
 }
 
 pub fn render(app: &mut App, snapshot: &Snapshot, buf: &mut Buffer, area: Rect, hits: &mut Hits) {
-    buf.set_style(area, Style::new().bg(app.palette.panel_bg));
+    buf.set_style(area, Style::new().bg(app.palette.canvas()));
     hits.tabs.row = Some(area);
     let mut content = area;
     content.width -= status_area(app, snapshot, buf, area);
@@ -117,7 +117,7 @@ fn drop_indicator(app: &App, buf: &mut Buffer, hits: &Hits) {
     if buf.area.contains((x, rect.y).into()) {
         buf[(x, rect.y)]
             .set_symbol("│")
-            .set_style(Style::new().fg(app.palette.accent).bg(app.palette.panel_bg));
+            .set_style(Style::new().fg(app.palette.accent).bg(app.palette.canvas()));
     }
 }
 
@@ -142,7 +142,7 @@ fn status_area(app: &App, snapshot: &Snapshot, buf: &mut Buffer, area: Rect) -> 
     let mut x = area.right() - total;
     for (i, (text, accent)) in segments.iter().enumerate() {
         if i > 0 {
-            let style = Style::new().fg(p.overlay0).bg(p.panel_bg);
+            let style = Style::new().fg(p.overlay0).bg(p.canvas());
             buf.set_string(x, area.y, &separator, style);
             x += width(&separator);
         }
@@ -152,7 +152,7 @@ fn status_area(app: &App, snapshot: &Snapshot, buf: &mut Buffer, area: Rect) -> 
                 .bg(p.accent)
                 .add_modifier(Modifier::BOLD)
         } else {
-            Style::new().fg(p.overlay1).bg(p.panel_bg)
+            Style::new().fg(p.overlay1).bg(p.canvas())
         };
         buf.set_string(x, area.y, text, style);
         x += width(text);
@@ -163,7 +163,7 @@ fn status_area(app: &App, snapshot: &Snapshot, buf: &mut Buffer, area: Rect) -> 
 fn new_tab_button(app: &App, buf: &mut Buffer, rect: Rect, hits: &mut Hits) {
     let style = Style::new()
         .fg(app.palette.overlay1)
-        .bg(app.palette.panel_bg);
+        .bg(app.palette.canvas());
     buf.set_string(rect.x, rect.y, " + ", style);
     hits.tabs.new_tab = Some(rect);
 }

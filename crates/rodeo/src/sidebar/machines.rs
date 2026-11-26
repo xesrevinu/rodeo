@@ -137,15 +137,6 @@ pub fn machine_row(
         );
         badge = Rect::new(start, rect.y, x - start, 1);
     }
-    let rule = (x + 1).min(rect.right());
-    put(
-        buf,
-        rule,
-        rect.y,
-        rect.right() - rule,
-        &"─".repeat(usize::from(rect.right() - rule)),
-        Style::new().fg(p.surface_dim),
-    );
     hits.machines.push(MachineHit {
         rect,
         badge,

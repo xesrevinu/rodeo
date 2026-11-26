@@ -3,7 +3,6 @@ use std::process::{Command, Output, Stdio};
 use std::time::{Duration, Instant};
 
 const BIN: &str = env!("CARGO_BIN_EXE_rodeo");
-const RUST: &str = "\x1b[38;2;232;103;60m";
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 const BRIM: &str = " ▀▀▀▀▀▀▀▀▀▀▀▀ ";
 
@@ -106,7 +105,7 @@ fn on_a_tty(name: &str, extra: &[&str], arg: &str, ready: &str) -> String {
 #[test]
 fn a_tty_gets_the_hat_in_brand_rust() {
     let screen = on_a_tty("color", &[], "--help", "running in hc.");
-    assert!(screen.contains(&format!("{RUST}▍")), "{screen:?}");
+    assert!(!screen.contains("▍"), "{screen:?}");
     assert!(screen.contains("\x1b[1mrodeo"), "{screen:?}");
     assert!(screen.contains("\x1b[48;2;232;103;60m▀▀▀▀▀▀"), "{screen:?}");
 }
@@ -115,7 +114,7 @@ fn a_tty_gets_the_hat_in_brand_rust() {
 fn no_color_gets_the_plain_hat_on_a_tty() {
     let screen = on_a_tty("nocolor", &["NO_COLOR=1"], "--help", "running in hc.");
     assert!(!screen.contains("\x1b["), "{screen:?}");
-    assert!(screen.contains(&format!("{BRIM}   rodeo▍")), "{screen:?}");
+    assert!(screen.contains(&format!("{BRIM}   rodeo")), "{screen:?}");
     assert!(
         screen.starts_with("\n      ██▄▄██\n  █▄  ██████  ▄█\n"),
         "{screen:?}"
@@ -150,7 +149,7 @@ fn a_pipe_gets_plain_help_and_version() {
     assert_eq!(lines[0], "");
     assert_eq!(lines[1], "      ██▄▄██");
     assert_eq!(lines[2], "  █▄  ██████  ▄█");
-    assert_eq!(lines[3], format!("  {BRIM}   rodeo▍"));
+    assert_eq!(lines[3], format!("  {BRIM}   rodeo"));
     assert_eq!(lines[6], "       ████");
     assert_eq!(run("--version"), format!("rodeo {VERSION}\n"));
 }

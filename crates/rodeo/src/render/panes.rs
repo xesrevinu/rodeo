@@ -30,6 +30,7 @@ pub fn render(app: &App, buf: &mut Buffer, hits: &mut Hits) -> Option<Cursor> {
         .iter()
         .find(|g| Some(&g.id) == focused_id.as_ref())
         .map(|g| g.rect);
+    let multi = geom.panes.len() > 1;
     if app.config.ui.pane_borders.draws_borders() {
         for ((x, y), line) in layout::border_lines(geom, gaps) {
             let symbol = line.symbol();
@@ -37,7 +38,7 @@ pub fn render(app: &App, buf: &mut Buffer, hits: &mut Hits) -> Option<Cursor> {
                 continue;
             }
             let lit = focused_rect.is_some_and(|r| layout::touches(x, y, r, gaps));
-            let color = if lit { p.accent } else { p.overlay0 };
+            let color = if lit && multi { p.accent } else { p.overlay0 };
             buf[(x, y)]
                 .set_symbol(symbol)
                 .set_style(Style::new().fg(color));

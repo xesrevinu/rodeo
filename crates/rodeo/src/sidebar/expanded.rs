@@ -33,11 +33,6 @@ pub fn header(buf: &mut Buffer, top: Rect, ctx: &Ctx<'_>) {
     }
     let wordmark = crate::brand::wordmark(crate::brand::Ink::of(ctx.palette));
     buf.set_line(top.x + 1, top.y, &wordmark, top.width - 1);
-    if spaces::header_rows(top.height) == 2 {
-        let border = "─".repeat(usize::from(top.width));
-        let style = Style::new().fg(ctx.palette.surface_dim);
-        put(buf, top.x, top.y + 1, top.width, &border, style);
-    }
 }
 
 pub fn footer(buf: &mut Buffer, area: Rect, ctx: &Ctx<'_>, hits: &mut Hits, machine: Option<&str>) {

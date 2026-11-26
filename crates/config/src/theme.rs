@@ -377,6 +377,15 @@ const fn rgb_palette(colors: &[&str; 18]) -> Palette {
     }
 }
 
+impl Palette {
+    /// Full-screen chrome (tab bar, splash, mode bar) inherits the host
+    /// terminal so opacity and the terminal theme show through. Floating
+    /// panels still use `panel_bg`.
+    pub const fn canvas(self) -> Color {
+        Color::Reset
+    }
+}
+
 pub const CATPPUCCIN: Palette = rgb_palette(&[
     "#89b4fa", "#181825", "#1e1e2e", "#313244", "#313244", "#45475a", "#1e1e2e", "#6c7086",
     "#7f849c", "#cdd6f4", "#a6adc8", "#cba6f7", "#a6e3a1", "#f9e2af", "#f38ba8", "#89b4fa",

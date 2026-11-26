@@ -49,10 +49,10 @@ pub fn render(app: &App, buf: &mut Buffer, hits: &mut Hits) {
     hits.covers.push(bar);
     let p = &app.palette;
     let styles = Styles {
-        base: Style::new().fg(p.overlay0).bg(p.panel_bg),
+        base: Style::new().fg(p.overlay0).bg(p.canvas()),
         key: Style::new()
             .fg(p.accent)
-            .bg(p.panel_bg)
+            .bg(p.canvas())
             .add_modifier(Modifier::BOLD),
         badge: Style::new()
             .fg(contrast(p))
@@ -214,9 +214,9 @@ fn prompt(app: &App, buf: &mut Buffer, bar: Rect, styles: &Styles) {
     );
     if let Some((cx, cy)) = prompt
         .field
-        .render(field, buf, Style::new().fg(p.text).bg(p.panel_bg))
+        .render(field, buf, Style::new().fg(p.text).bg(p.canvas()))
     {
-        buf[(cx, cy)].set_style(Style::new().fg(p.panel_bg).bg(p.text));
+        buf[(cx, cy)].set_style(Style::new().fg(p.canvas()).bg(p.text));
     }
     if footer_width > 0 {
         buf.set_string(bar.right() - footer_width, bar.y, footer, base);

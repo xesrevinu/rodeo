@@ -132,7 +132,7 @@ mod tests {
         assert_eq!(lines[0], "");
         assert_eq!(lines[1], "      ██▄▄██");
         assert_eq!(lines[2], "  █▄  ██████  ▄█");
-        assert_eq!(lines[3], "   ▀▀▀▀▀▀▀▀▀▀▀▀    rodeo▍");
+        assert_eq!(lines[3], "   ▀▀▀▀▀▀▀▀▀▀▀▀    rodeo");
         assert_eq!(lines[4], format!("       ████        {TITLE}"));
         assert_eq!(lines[6], "       ████");
         assert_eq!(lines[7], "");
@@ -158,7 +158,7 @@ mod tests {
         assert_eq!(lines[2], "  █▄  \x1b[48;2;232;103;60m▀▀▀▀▀▀\x1b[49m  ▄█");
         assert_eq!(
             lines[3],
-            format!("   ▀▀▀▀▀▀▀▀▀▀▀▀    \x1b[1mrodeo\x1b[0m{rust}▍\x1b[0m")
+            format!("   ▀▀▀▀▀▀▀▀▀▀▀▀    \x1b[1mrodeo\x1b[0m")
         );
         assert_eq!(
             lines[4],

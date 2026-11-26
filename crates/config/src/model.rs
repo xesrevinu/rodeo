@@ -278,7 +278,7 @@ impl Default for UiConfig {
             prompt_new_tab_name: true,
             prompt_new_workspace_name: false,
             pane_borders: PaneBorders::Auto,
-            pane_outer_borders: true,
+            pane_outer_borders: false,
             pane_scrollbars: true,
             pane_gaps: true,
             show_agent_labels_on_pane_borders: false,

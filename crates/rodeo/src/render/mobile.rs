@@ -34,7 +34,7 @@ pub fn header(app: &App, snapshot: &Snapshot, buf: &mut Buffer, area: Rect) {
     if area.width == 0 || area.height == 0 {
         return;
     }
-    buf.set_style(area, Style::new().bg(p.panel_bg));
+    buf.set_style(area, Style::new().bg(p.canvas()));
     let button = switch_button(area);
     let status = Rect::new(
         area.x,
@@ -58,7 +58,7 @@ fn status_line(app: &App, snapshot: &Snapshot, buf: &mut Buffer, area: Rect) {
             area.y,
             area.width,
             " no workspace",
-            Style::new().fg(p.text).bg(p.panel_bg),
+            Style::new().fg(p.text).bg(p.canvas()),
         );
         return;
     };
@@ -73,7 +73,7 @@ fn status_line(app: &App, snapshot: &Snapshot, buf: &mut Buffer, area: Rect) {
         area.y,
         name_width.min(3),
         &format!(" {} ", state.icon(indicators)),
-        Style::new().fg(state.color(p)).bg(p.panel_bg),
+        Style::new().fg(state.color(p)).bg(p.canvas()),
     );
     put(
         buf,
@@ -83,7 +83,7 @@ fn status_line(app: &App, snapshot: &Snapshot, buf: &mut Buffer, area: Rect) {
         &truncate(&space.name, usize::from(name_width.saturating_sub(4))),
         Style::new()
             .fg(p.text)
-            .bg(p.panel_bg)
+            .bg(p.canvas())
             .add_modifier(Modifier::BOLD),
     );
     put(
@@ -92,7 +92,7 @@ fn status_line(app: &App, snapshot: &Snapshot, buf: &mut Buffer, area: Rect) {
         area.y,
         tab_width.saturating_sub(1),
         &tab,
-        Style::new().fg(p.overlay1).bg(p.panel_bg),
+        Style::new().fg(p.overlay1).bg(p.canvas()),
     );
     if area.height > 1 {
         summary(
@@ -151,7 +151,7 @@ fn summary(app: &App, snapshot: &Snapshot, buf: &mut Buffer, row: Rect) {
     let counts = states.map(|s| (s, snapshot.agents.iter().filter(|a| a.state == s).count()));
     let total: usize = counts.iter().map(|(_, n)| n).sum();
     let pending: usize = counts[..3].iter().map(|(_, n)| n).sum();
-    let quiet = Style::new().fg(p.overlay1).bg(p.panel_bg);
+    let quiet = Style::new().fg(p.overlay1).bg(p.canvas());
     if total == 0 {
         put(buf, row.x, row.y, row.width, " no agents", quiet);
         return;
@@ -189,7 +189,7 @@ fn summary(app: &App, snapshot: &Snapshot, buf: &mut Buffer, row: Rect) {
                 row.y,
                 row.right() - x,
                 separator,
-                Style::new().fg(p.overlay0).bg(p.panel_bg),
+                Style::new().fg(p.overlay0).bg(p.canvas()),
             );
             x += width(separator);
         }
@@ -201,7 +201,7 @@ fn summary(app: &App, snapshot: &Snapshot, buf: &mut Buffer, row: Rect) {
             };
             Style::new()
                 .fg(fg)
-                .bg(p.panel_bg)
+                .bg(p.canvas())
                 .add_modifier(Modifier::BOLD)
         } else {
             quiet
@@ -217,7 +217,7 @@ fn summary(app: &App, snapshot: &Snapshot, buf: &mut Buffer, row: Rect) {
             row.y,
             2,
             " …",
-            Style::new().fg(p.overlay0).bg(p.panel_bg),
+            Style::new().fg(p.overlay0).bg(p.canvas()),
         );
     }
 }

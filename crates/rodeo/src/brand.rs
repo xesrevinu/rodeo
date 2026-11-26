@@ -94,20 +94,16 @@ pub fn hat(buf: &mut Buffer, x: u16, y: u16, ink: Ink) {
 }
 
 pub fn wordmark(ink: Ink) -> Line<'static> {
-    Line::from(vec![
-        Span::styled(
-            "rodeo",
-            Style::new().fg(ink.text).add_modifier(Modifier::BOLD),
-        ),
-        Span::styled("▍", Style::new().fg(ink.accent)),
-    ])
+    Line::from(vec![Span::styled(
+        "rodeo",
+        Style::new().fg(ink.text).add_modifier(Modifier::BOLD),
+    )])
 }
 
 pub fn mini_wordmark(ink: Ink) -> Line<'static> {
     Line::from(vec![
         Span::raw(" "),
         Span::styled("r", Style::new().fg(ink.text).add_modifier(Modifier::BOLD)),
-        Span::styled("▍", Style::new().fg(ink.accent)),
     ])
 }
 
@@ -301,17 +297,16 @@ mod tests {
     }
 
     #[test]
-    fn the_mini_wordmark_is_a_bold_r_and_an_accent_cursor() {
+    fn the_mini_wordmark_is_a_bold_r() {
         let ink = Ink {
             text: Color::Rgb(1, 1, 1),
             accent: Color::Rgb(2, 2, 2),
         };
-        let mut buf = Buffer::empty(Rect::new(0, 0, 3, 1));
-        buf.set_line(0, 0, &mini_wordmark(ink), 3);
-        assert_eq!(rows(&buf), [" r▍"]);
+        let mut buf = Buffer::empty(Rect::new(0, 0, 2, 1));
+        buf.set_line(0, 0, &mini_wordmark(ink), 2);
+        assert_eq!(rows(&buf), [" r"]);
         assert_eq!(buf[(1, 0)].fg, ink.text);
         assert!(buf[(1, 0)].modifier.contains(Modifier::BOLD));
-        assert_eq!(buf[(2, 0)].fg, ink.accent);
     }
 
     #[test]
@@ -396,7 +391,7 @@ mod tests {
         buf.set_line(0, 0, &wordmark(ink), 8);
         assert_eq!(
             ansi(&buf, true),
-            "\x1b[1mrodeo\x1b[0m\x1b[38;2;232;103;60m▍\x1b[0m"
+            "\x1b[1mrodeo\x1b[0m"
         );
     }
 }

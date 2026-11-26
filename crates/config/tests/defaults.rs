@@ -78,7 +78,7 @@ fn ui_section() {
     assert!(ui.prompt_new_tab_name);
     assert!(!ui.prompt_new_workspace_name);
     assert_eq!(ui.pane_borders, PaneBorders::Auto);
-    assert!(ui.pane_outer_borders);
+    assert!(!ui.pane_outer_borders);
     assert!(ui.pane_scrollbars);
     assert!(ui.pane_gaps);
     assert!(!ui.show_agent_labels_on_pane_borders);

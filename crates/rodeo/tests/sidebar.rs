@@ -182,8 +182,8 @@ fn spaces_show_tokens_groups_and_the_footer() {
     let mut app = app();
     let buf = frame(&mut app);
     let rows = column(&buf, 26);
-    assert_eq!(rows[0], " rodeo▍                  │");
-    assert_eq!(rows[1], "─────────────────────────│");
+    assert_eq!(rows[0], " rodeo                   │");
+    assert_eq!(rows[1], "                         │");
     assert_eq!(rows[2], " ● repo                 ▾│");
     assert_eq!(rows[3], "   main ↑2 ↓1            │");
     assert_eq!(rows[4], "   └─ ● feat             │");
@@ -211,10 +211,6 @@ fn spaces_show_tokens_groups_and_the_footer() {
     assert_eq!(buf[(0, 4)].bg, app.palette.sidebar_bg);
     assert_eq!(buf[(1, 0)].fg, app.palette.text);
     assert!(buf[(1, 0)].modifier.contains(Modifier::BOLD));
-    assert_eq!(buf[(6, 0)].fg, app.palette.accent);
-    for x in 0..25 {
-        assert_eq!(buf[(x, 1)].fg, app.palette.surface_dim);
-    }
     assert_eq!(app.hits.sidebar.spaces_body, Some(Rect::new(0, 2, 25, 12)));
     assert_eq!(app.hits.sidebar.spaces[0].rect.y, 2);
 }
@@ -438,8 +434,8 @@ fn the_compact_sidebar_numbers_rows() {
     let mut app = app_with("[ui]\nsidebar_start_collapsed = true\n");
     let buf = frame(&mut app);
     let rows = column(&buf, 4);
-    assert_eq!(rows[0], " r▍│");
-    assert_eq!(rows[1], "───│");
+    assert_eq!(rows[0], " r │");
+    assert_eq!(rows[1], "   │");
     assert_eq!(rows[2], "1 ●│");
     assert_eq!(rows[3], "2 ●│");
     assert_eq!(rows[4], "3 ·│");
@@ -450,8 +446,6 @@ fn the_compact_sidebar_numbers_rows() {
     assert_eq!(buf[(0, 2)].bg, app.palette.active_row_bg);
     assert_eq!(buf[(1, 0)].fg, app.palette.text);
     assert!(buf[(1, 0)].modifier.contains(Modifier::BOLD));
-    assert_eq!(buf[(2, 0)].fg, app.palette.accent);
-    assert_eq!(buf[(0, 1)].fg, app.palette.surface_dim);
     let hits: Vec<(u16, &str)> = app
         .hits
         .sidebar
@@ -465,7 +459,7 @@ fn the_compact_sidebar_numbers_rows() {
     let _ = frame(&mut app);
     click(&mut app, 1, 29);
     let rows = column(&frame(&mut app), 26);
-    assert_eq!(rows[0], " rodeo▍                  │");
+    assert_eq!(rows[0], " rodeo                   │");
 }
 
 #[test]
@@ -518,20 +512,19 @@ fn machines_get_rows_states_and_nested_spaces() {
     );
     let buf = frame(&mut app);
     let rows = column(&buf, 26);
-    assert_eq!(rows[0], " rodeo▍                  │");
-    assert_eq!(rows[1], "─────────────────────────│");
-    assert_eq!(rows[2], " ▾ Local ────────────────│");
+    assert_eq!(rows[0], " rodeo                   │");
+    assert_eq!(rows[1], "                         │");
+    assert_eq!(rows[2], " ▾ Local                 │");
     assert_eq!(rows[3], "   ● repo               ▾│");
     assert_eq!(rows[4], "     main ↑2 ↓1          │");
     assert_eq!(rows[5], "     └─ · feat           │");
     assert_eq!(rows[6], "   · notes               │");
-    assert_eq!(rows[7], " ▾ box ● ────────────────│");
+    assert_eq!(rows[7], " ▾ box ●                 │");
     assert_eq!(rows[8], "   ● api                 │");
     assert_eq!(rows[14], " new · Local         menu│");
     assert_eq!(rows[18], " ● Local · repo          │");
     assert_eq!(rows[20], " ● box · api             │");
     assert_eq!(buf[(7, 7)].fg, app.palette.green);
-    assert_eq!(buf[(9, 7)].fg, app.palette.surface_dim);
     assert!(buf[(3, 7)].modifier.contains(Modifier::BOLD));
     click(&mut app, 5, 7);
     assert_eq!(app.view.space.as_deref(), Some("box/r1"));
@@ -539,11 +532,11 @@ fn machines_get_rows_states_and_nested_spaces() {
     assert_eq!(rows[14], " new · box           menu│");
     click(&mut app, 5, 7);
     let rows = column(&frame(&mut app), 26);
-    assert_eq!(rows[7], " ▸ box ● ────────────────│");
+    assert_eq!(rows[7], " ▸ box ●                 │");
     assert_eq!(rows[8], "                         │");
     click(&mut app, 1, 2);
     let rows = column(&frame(&mut app), 26);
-    assert_eq!(rows[2], " ▸ Local ────────────────│");
+    assert_eq!(rows[2], " ▸ Local                 │");
     assert_eq!(app.view.space.as_deref(), Some("box/r1"));
 }
 
@@ -560,7 +553,7 @@ fn offline_machines_dim_their_spaces_and_explain_errors() {
     app.after_docs();
     let buf = frame(&mut app);
     let rows = column(&buf, 26);
-    assert_eq!(rows[7], " ▾ box ! auth ───────────│");
+    assert_eq!(rows[7], " ▾ box ! auth            │");
     assert_eq!(rows[8], "   · api                 │");
     assert_eq!(buf[(7, 7)].fg, app.palette.red);
     assert!(buf[(5, 8)].modifier.contains(Modifier::DIM));
@@ -583,7 +576,7 @@ fn offline_machines_dim_their_spaces_and_explain_errors() {
         ..hc::MachineView::default()
     }]);
     let rows = column(&frame(&mut app), 26);
-    assert_eq!(rows[7], " ▾ box ◐ reconnecting ───│");
+    assert_eq!(rows[7], " ▾ box ◐ reconnecting    │");
 }
 
 #[test]
@@ -592,8 +585,8 @@ fn the_compact_machines_view() {
     add_remote(&mut app, "connected", None);
     let buf = frame(&mut app);
     let rows = column(&buf, 4);
-    assert_eq!(rows[0], " r▍│");
-    assert_eq!(rows[1], "───│");
+    assert_eq!(rows[0], " r │");
+    assert_eq!(rows[1], "   │");
     assert_eq!(rows[2], "▾L │");
     assert_eq!(rows[3], " 1●│");
     assert_eq!(rows[6], "▾2●│");
@@ -614,7 +607,7 @@ fn a_lost_core_shows_the_lifecycle_banner() {
     assert_eq!(x, W - 23);
     assert_eq!(buf[(x, y)].fg, app.palette.yellow);
     assert_eq!(buf[(x - 1, y)].bg, app.palette.surface0);
-    assert_eq!(line(&buf, 0, 26), " rodeo▍                  │");
+    assert_eq!(line(&buf, 0, 26), " rodeo                   │");
     assert!(app.hits.covers.contains(&Rect::new(x - 1, y, W - x + 1, 1)));
 }
 
@@ -713,7 +706,7 @@ fn navigate_stops_on_machine_rows_in_sidebar_order() {
     key(&mut app, KeyCode::Up);
     assert_eq!(at(&app), machine_nav(None));
     let rows = column(&frame(&mut app), 26);
-    assert_eq!(rows[2], " ▾ Local ────────────────│");
+    assert_eq!(rows[2], " ▾ Local                 │");
     let buf = frame(&mut app);
     assert_eq!(buf[(3, 2)].bg, app.palette.selection_bg);
     assert_eq!(buf[(3, 3)].bg, app.palette.active_row_bg);
@@ -824,7 +817,7 @@ fn arrows_fold_machine_rows_and_groups() {
     key(&mut app, KeyCode::Left);
     assert_eq!(
         column(&frame(&mut app), 26)[7],
-        " ▸ box ● ────────────────│"
+        " ▸ box ●                 │"
     );
     key(&mut app, KeyCode::Left);
     assert!(
@@ -836,7 +829,7 @@ fn arrows_fold_machine_rows_and_groups() {
     key(&mut app, KeyCode::Right);
     assert_eq!(
         column(&frame(&mut app), 26)[7],
-        " ▾ box ● ────────────────│"
+        " ▾ box ●                 │"
     );
     assert_eq!(app.view.mode, Mode::Navigate);
 }
@@ -946,7 +939,7 @@ fn a_machine_still_loading_its_doc_is_not_ready() {
     }]);
     app.after_docs();
     let rows = column(&frame(&mut app), 26);
-    assert_eq!(rows[7], " ▾ box ◐ connecting ─────│");
+    assert_eq!(rows[7], " ▾ box ◐ connecting      │");
     click(&mut app, 5, 7);
     let notice = app.notice.clone().expect("a not ready notice");
     assert_eq!(notice.body, "box is not ready");

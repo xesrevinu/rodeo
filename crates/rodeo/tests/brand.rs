@@ -156,16 +156,13 @@ fn assert_hat_colors(buf: &Buffer, x: u16, y: u16, text: Color, accent: Color, b
     }
 }
 
-fn assert_wordmark(buf: &Buffer, x: u16, y: u16, text: Color, accent: Color) {
+fn assert_wordmark(buf: &Buffer, x: u16, y: u16, text: Color, _accent: Color) {
     for (i, ch) in "rodeo".chars().enumerate() {
         let cell = &buf[(x + u16::try_from(i).expect("short"), y)];
         assert_eq!(cell.symbol(), ch.to_string());
         assert_eq!(cell.fg, text);
         assert!(cell.modifier.contains(Modifier::BOLD));
     }
-    let cursor = &buf[(x + 5, y)];
-    assert_eq!(cursor.symbol(), "▍");
-    assert_eq!(cursor.fg, accent);
 }
 
 const HINT: &str = "prefix+shift+n  new workspace";
@@ -177,12 +174,12 @@ fn the_empty_state_shows_the_hat_wordmark_and_hint() {
     let area = splash_area(&app);
     assert_eq!(
         rows(&buf, area),
-        expected(area, &[&HAT, &["rodeo▍"], &[HINT]])
+        expected(area, &[&HAT, &["rodeo"], &[HINT]])
     );
     let p = app.palette;
     let (x, y) = hat_at(&buf, area);
     assert_hat_colors(&buf, x, y, p.text, p.accent, Color::Reset);
-    let (wx, wy) = find(&buf, area, "rodeo▍");
+    let (wx, wy) = find(&buf, area, "rodeo");
     assert_eq!(wy, y + 7);
     assert_eq!(wx, x + 4);
     assert_wordmark(&buf, wx, wy, p.text, p.accent);
@@ -207,9 +204,9 @@ fn the_empty_state_drops_the_hint_then_the_wordmark_then_the_hat() {
     let mut app = empty(100, 30, "");
     let chrome = 30 - splash_area(&app).height;
     for (height, blocks) in [
-        (10, vec![&HAT[..], &["rodeo▍"], &[HINT]]),
-        (9, vec![&HAT[..], &["rodeo▍"]]),
-        (8, vec![&HAT[..], &["rodeo▍"]]),
+        (10, vec![&HAT[..], &["rodeo"], &[HINT]]),
+        (9, vec![&HAT[..], &["rodeo"]]),
+        (8, vec![&HAT[..], &["rodeo"]]),
         (7, vec![&HAT[..]]),
         (6, vec![&HAT[..]]),
         (5, vec![]),
@@ -231,13 +228,13 @@ fn a_narrow_empty_state_drops_what_does_not_fit_across() {
     let area = splash_area(&app);
     assert_eq!(area.width, 14);
     let buf = frame(&mut app);
-    assert_eq!(rows(&buf, area), expected(area, &[&HAT, &["rodeo▍"]]));
+    assert_eq!(rows(&buf, area), expected(area, &[&HAT, &["rodeo"]]));
     app.screen = Rect::new(0, 0, 39, 30);
     app.relayout();
     let buf = frame(&mut app);
     let area = splash_area(&app);
     assert_eq!(area.width, 13);
-    assert_eq!(rows(&buf, area), expected(area, &[&["rodeo▍"]]));
+    assert_eq!(rows(&buf, area), expected(area, &[&["rodeo"]]));
 }
 
 #[test]
@@ -248,7 +245,7 @@ fn the_brand_follows_the_terminal_theme() {
     let (x, y) = hat_at(&buf, area);
     assert_eq!(app.palette.text, Color::Reset);
     assert_hat_colors(&buf, x, y, Color::Reset, Color::Blue, Color::Reset);
-    let (wx, wy) = find(&buf, area, "rodeo▍");
+    let (wx, wy) = find(&buf, area, "rodeo");
     assert_wordmark(&buf, wx, wy, Color::Reset, Color::Blue);
 }
 
@@ -260,20 +257,20 @@ fn connecting_shows_the_brand_above_the_status() {
     let status = "Local: connecting. Select a connected machine.";
     assert_eq!(
         rows(&buf, area),
-        expected(area, &[&HAT, &["rodeo▍"], &[status]])
+        expected(area, &[&HAT, &["rodeo"], &[status]])
     );
     let p = app.palette;
     let (x, y) = hat_at(&buf, area);
-    assert_hat_colors(&buf, x, y, p.text, p.accent, p.panel_bg);
-    let (wx, wy) = find(&buf, area, "rodeo▍");
+    assert_hat_colors(&buf, x, y, p.text, p.accent, p.canvas());
+    let (wx, wy) = find(&buf, area, "rodeo");
     assert_wordmark(&buf, wx, wy, p.text, p.accent);
     let (sx, sy) = find(&buf, area, status);
     assert_eq!(sy, y + 9);
     assert_eq!(
         (buf[(sx, sy)].fg, buf[(sx, sy)].bg),
-        (p.overlay0, p.panel_bg)
+        (p.overlay0, p.canvas())
     );
-    assert_eq!(buf[(area.x, area.y)].bg, p.panel_bg);
+    assert_eq!(buf[(area.x, area.y)].bg, p.canvas());
 }
 
 #[test]
@@ -286,7 +283,7 @@ fn a_down_core_shows_the_error_under_the_status() {
     let status = "Local: reconnecting. Select a connected machine.";
     assert_eq!(
         rows(&buf, area),
-        expected(area, &[&HAT, &["rodeo▍"], &[status, "no socket"]])
+        expected(area, &[&HAT, &["rodeo"], &[status, "no socket"]])
     );
 }
 
@@ -296,7 +293,7 @@ fn a_short_connecting_screen_keeps_the_status() {
     let chrome = 30 - splash_area(&app).height;
     let status = "Local: connecting. Select a connected machine.";
     for (height, blocks) in [
-        (10, vec![&HAT[..], &["rodeo▍"], &[status]]),
+        (10, vec![&HAT[..], &["rodeo"], &[status]]),
         (9, vec![&HAT[..], &[status]]),
         (8, vec![&HAT[..], &[status]]),
         (7, vec![&[status]]),
@@ -329,7 +326,7 @@ fn a_narrow_connecting_screen_cuts_the_status_at_the_edge() {
             &"Local: connecting. Select a connected machine."[..usize::from(area.width) - 1]
         )
     );
-    assert!(rows.iter().any(|r| r.contains("rodeo▍")));
+    assert!(rows.iter().any(|r| r.contains("rodeo")));
 }
 
 fn sidebar_app(rows: u16, config: &str, remote: bool) -> App {
@@ -369,13 +366,10 @@ fn the_sidebar_header_is_the_wordmark_over_a_border() {
         let sidebar = app.regions.sidebar;
         let w = sidebar.width;
         let header = rows(&buf, Rect::new(sidebar.x, sidebar.y, w, 2));
-        assert_eq!(header[0], padded(" rodeo▍", w));
-        assert_eq!(header[1], format!("{}│", "─".repeat(usize::from(w) - 1)));
+        assert_eq!(header[0], padded(" rodeo", w));
+        assert_eq!(header[1], format!("{}│", " ".repeat(usize::from(w) - 1)));
         let p = app.palette;
         assert_wordmark(&buf, sidebar.x + 1, sidebar.y, p.text, p.accent);
-        for x in sidebar.x..sidebar.right() - 1 {
-            assert_eq!(buf[(x, sidebar.y + 1)].fg, p.surface_dim);
-        }
         let body = app.hits.sidebar.spaces_body.expect("a body");
         assert_eq!(body.y, sidebar.y + 2);
         if remote {
@@ -392,15 +386,15 @@ fn a_short_sidebar_drops_the_border() {
     let mut app = sidebar_app(8, "", false);
     let rows = sidebar_rows(&mut app);
     let w = app.regions.sidebar.width;
-    assert_eq!(rows[0], padded(" rodeo▍", w));
-    assert_eq!(rows[1], format!("{}│", "─".repeat(usize::from(w) - 1)));
+    assert_eq!(rows[0], padded(" rodeo", w));
+    assert_eq!(rows[1], format!("{}│", " ".repeat(usize::from(w) - 1)));
     assert!(rows[2].starts_with(" · w"), "{rows:#?}");
     assert!(rows[3].starts_with(" new"), "{rows:#?}");
     assert_eq!(app.hits.sidebar.spaces[0].rect.y, 2);
     app.screen = Rect::new(0, 0, 100, 6);
     app.relayout();
     let rows = sidebar_rows(&mut app);
-    assert_eq!(rows[0], padded(" rodeo▍", w));
+    assert_eq!(rows[0], padded(" rodeo", w));
     assert!(rows[1].starts_with(" · w"), "{rows:#?}");
     assert!(rows[2].starts_with(" new"), "{rows:#?}");
     assert_eq!(app.hits.sidebar.spaces[0].rect.y, 1);
@@ -415,14 +409,12 @@ fn the_compact_sidebar_shows_the_mini_wordmark() {
         let sidebar = app.regions.sidebar;
         assert_eq!(sidebar.width, 4);
         let rows = rows(&buf, sidebar);
-        assert_eq!(rows[..2], [" r▍│", "───│"]);
+        assert_eq!(rows[..2], [" r │", "   │"]);
         let p = app.palette;
         assert_eq!(buf[(1, 0)].fg, p.text);
         assert!(buf[(1, 0)].modifier.contains(Modifier::BOLD));
-        assert_eq!(buf[(2, 0)].fg, p.accent);
         for x in 0..3 {
             assert_eq!(buf[(x, 0)].bg, p.sidebar_bg);
-            assert_eq!(buf[(x, 1)].fg, p.surface_dim);
         }
         let first = if remote {
             assert_eq!(rows[2], "▾L │");
@@ -440,8 +432,8 @@ fn a_short_compact_sidebar_drops_the_border_then_the_mark() {
     let collapsed = "[ui]\nsidebar_start_collapsed = true\n";
     let mut app = sidebar_app(30, collapsed, false);
     for (height, top, first) in [
-        (3, vec![" r▍│", "───│"], 2),
-        (2, vec![" r▍│"], 1),
+        (3, vec![" r │", "   │"], 2),
+        (2, vec![" r │"], 1),
         (1, vec![], 0),
     ] {
         app.screen = Rect::new(0, 0, 100, height);
@@ -468,6 +460,6 @@ fn a_mobile_connecting_screen_stays_below_the_lifecycle_banner() {
     let status = "Local: connecting. Select a connected machine.";
     assert_eq!(
         rows(&buf, below),
-        expected(below, &[&HAT, &["rodeo▍"], &[status]])
+        expected(below, &[&HAT, &["rodeo"], &[status]])
     );
 }

@@ -124,8 +124,8 @@ fn unavailable(app: &App, buf: &mut Buffer, area: Rect) {
         return;
     }
     let p = &app.palette;
-    buf.set_style(area, Style::new().bg(p.panel_bg));
-    let style = Style::new().fg(p.overlay0).bg(p.panel_bg);
+    buf.set_style(area, Style::new().bg(p.canvas()));
+    let style = Style::new().fg(p.overlay0).bg(p.canvas());
     let (text, detail) = if app.conn.is_online() {
         match app.machines.local().slot.state() {
             crate::sync::State::Undecodable(why) | crate::sync::State::Unreadable(why) => {

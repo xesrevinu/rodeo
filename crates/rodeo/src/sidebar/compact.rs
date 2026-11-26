@@ -40,13 +40,7 @@ pub fn header(buf: &mut Buffer, top: Rect, ctx: &Ctx<'_>) -> Rect {
     }
     let mark = mini_wordmark(Ink::of(ctx.palette));
     buf.set_line(top.x, top.y, &mark, top.width);
-    let border = top.height > 2;
-    if border {
-        let line = "─".repeat(usize::from(top.width));
-        let style = Style::new().fg(ctx.palette.surface_dim);
-        put(buf, top.x, top.y + 1, top.width, &line, style);
-    }
-    let used = 1 + u16::from(border);
+    let used = 1 + u16::from(top.height > 2);
     Rect::new(top.x, top.y + used, top.width, top.height - used)
 }
 
