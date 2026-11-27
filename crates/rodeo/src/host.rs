@@ -95,9 +95,11 @@ pub fn probe() -> HostInfo {
         && size.width > 0
         && size.height > 0
     {
+        let cols = u32::from(size.columns);
+        let rows = u32::from(size.rows);
         info.cell_px = (
-            ((f64::from(size.width) / f64::from(size.columns)).round() as u32).max(1),
-            ((f64::from(size.height) / f64::from(size.rows)).round() as u32).max(1),
+            ((u32::from(size.width) + cols / 2) / cols).max(1),
+            ((u32::from(size.height) + rows / 2) / rows).max(1),
         );
     }
     let mut out = io::stdout();

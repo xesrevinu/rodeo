@@ -52,6 +52,8 @@ fn placements_expose_position_size_and_data() {
             image: 7,
             placement: 3,
             image_generation: placement.image_generation,
+            image_width: 2,
+            image_height: 1,
             z: -5,
             col: 2,
             row: 1,
@@ -68,6 +70,8 @@ fn placements_expose_position_size_and_data() {
         }
     );
     let image = t.image(7).unwrap();
+    assert!(t.has_image(7));
+    assert!(!t.has_image(999));
     assert_eq!((image.width, image.height), (2, 1));
     assert_eq!(image.format, ImageFormat::Rgb);
     assert_eq!(image.data, [255, 0, 0, 0, 255, 0]);

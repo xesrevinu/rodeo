@@ -24,8 +24,8 @@ fn top_level_and_runtime_sections() {
     assert_eq!(config.server.headless_cols, 120);
     assert_eq!(config.server.headless_rows, 40);
     assert_eq!(config.update.channel, UpdateChannel::Stable);
-    assert!(config.update.version_check);
-    assert!(config.update.manifest_check);
+    assert!(!config.update.version_check);
+    assert!(!config.update.manifest_check);
     assert_eq!(config.worktrees.directory, "~/.herdr/worktrees");
     assert_eq!(config.advanced.scrollback_limit_bytes, 10_000_000);
     assert!(config.remote.manage_ssh_config);

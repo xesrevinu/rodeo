@@ -156,10 +156,7 @@ mod tests {
         let out = help(true);
         let lines: Vec<&str> = out.split('\n').collect();
         assert_eq!(lines[2], "  █▄  \x1b[48;2;232;103;60m▀▀▀▀▀▀\x1b[49m  ▄█");
-        assert_eq!(
-            lines[3],
-            format!("   ▀▀▀▀▀▀▀▀▀▀▀▀    \x1b[1mrodeo\x1b[0m")
-        );
+        assert_eq!(lines[3], "   ▀▀▀▀▀▀▀▀▀▀▀▀    \x1b[1mrodeo\x1b[0m");
         assert_eq!(
             lines[4],
             format!("       {rust}████\x1b[39m        {TITLE}")

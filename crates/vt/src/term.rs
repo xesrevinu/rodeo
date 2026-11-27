@@ -111,6 +111,7 @@ pub struct Terminal {
     input: Input,
     renderer: RefCell<Renderer>,
     images: RefCell<Images>,
+    render_gen: u64,
 }
 
 impl Terminal {
@@ -138,6 +139,7 @@ impl Terminal {
             input: Input::new()?,
             renderer: RefCell::new(Renderer::new()?),
             images: RefCell::new(Images::new()?),
+            render_gen: 1,
         };
         term.rows.sync(&mut term.vt);
         Ok(term)
@@ -163,6 +165,7 @@ impl Terminal {
             }
         }
         self.rows.sync(&mut self.vt);
+        self.bump_render();
     }
 
     pub fn resize(&mut self, cols: u16, rows: u16, cell_px: (u32, u32)) -> Result<(), Error> {
@@ -170,6 +173,7 @@ impl Terminal {
         self.vt
             .resize(cols.max(1), rows.max(1), cell_px.0, cell_px.1)?;
         self.rows.sync(&mut self.vt);
+        self.bump_render();
         Ok(())
     }
 
@@ -180,6 +184,7 @@ impl Terminal {
         self.vt.reset();
         let _ = self.vt.set_mode(Mode::GRAPHEME_CLUSTER, true);
         self.rows.sync(&mut self.vt);
+        self.bump_render();
     }
 
     pub fn clear(&mut self) {
@@ -198,6 +203,7 @@ impl Terminal {
             .vt_write(format!("{abort}{scroll}\x1b[3J\x1b[1;{col}H").as_bytes());
         self.vt.scroll_viewport(ScrollViewport::Bottom);
         self.rows.sync(&mut self.vt);
+        self.bump_render();
     }
 
     pub fn size(&self) -> (u16, u16) {
@@ -241,6 +247,14 @@ impl Terminal {
 
     pub(crate) fn renderer(&self) -> &RefCell<Renderer> {
         &self.renderer
+    }
+
+    pub(crate) fn render_gen(&self) -> u64 {
+        self.render_gen
+    }
+
+    fn bump_render(&mut self) {
+        self.render_gen = self.render_gen.wrapping_add(1);
     }
 
     pub(crate) fn images(&self) -> &RefCell<Images> {
@@ -309,6 +323,7 @@ impl Terminal {
 
     pub fn end_synchronized_output(&mut self) {
         let _ = self.vt.set_mode(Mode::SYNC_OUTPUT, false);
+        self.bump_render();
     }
 
     pub fn cursor(&self) -> CursorState {
@@ -362,6 +377,7 @@ impl Terminal {
 
     pub fn scroll(&mut self, lines: isize) {
         self.vt.scroll_viewport(ScrollViewport::Delta(lines));
+        self.bump_render();
     }
 
     pub fn scroll_page(&mut self, pages: isize) {
@@ -371,10 +387,12 @@ impl Terminal {
 
     pub fn scroll_to_top(&mut self) {
         self.vt.scroll_viewport(ScrollViewport::Top);
+        self.bump_render();
     }
 
     pub fn scroll_to_bottom(&mut self) {
         self.vt.scroll_viewport(ScrollViewport::Bottom);
+        self.bump_render();
     }
 
     pub fn scroll_to_row(&mut self, top: u64) {
@@ -385,6 +403,7 @@ impl Terminal {
         } else {
             self.vt
                 .scroll_viewport(ScrollViewport::Row(usize::try_from(offset).unwrap_or(0)));
+            self.bump_render();
         }
     }
 

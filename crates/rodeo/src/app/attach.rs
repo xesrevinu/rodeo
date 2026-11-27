@@ -99,7 +99,7 @@ impl App {
         let idle: Vec<String> = self
             .panes
             .iter()
-            .filter(|p| p.link == Link::Idle && !is_pending(&p.address))
+            .filter(|p| p.shown && p.link == Link::Idle && !is_pending(&p.address))
             .map(|p| p.address.clone())
             .collect();
         for address in idle {
@@ -137,11 +137,16 @@ impl App {
     }
 
     pub fn reattach(&mut self, address: &str) {
-        if let Some(pane) = self.panes.get_mut(address)
+        let should_attach = if let Some(pane) = self.panes.get_mut(address)
             && !matches!(pane.link, Link::Attached | Link::Attaching)
         {
             pane.detach();
             pane.link = Link::Idle;
+            pane.shown
+        } else {
+            false
+        };
+        if should_attach {
             self.attach(address);
         }
     }
@@ -156,8 +161,12 @@ impl App {
         let Some(pane) = self.panes.get_mut(address) else {
             return;
         };
-        if let Ok(term) = vt::Terminal::new(pane.size.0, pane.size.1, options) {
+        if pane.attach > 0
+            && let Ok(term) = vt::Terminal::new(pane.size.0, pane.size.1, options)
+        {
             pane.term = term;
+        }
+        if pane.term.size() != pane.size || pane.term.cell_px() != self.host.cell_px {
             let _ = pane
                 .term
                 .resize(pane.size.0, pane.size.1, self.host.cell_px);
@@ -270,32 +279,66 @@ impl App {
         if pane.attach != attach {
             return;
         }
+        let shown = pane.shown;
         match output {
             Some(Output::Bytes(bytes)) => {
+                let was_alt = pane.term.alternate_screen();
+                let was_mouse = pane.term.wants_mouse();
                 pane.feed(&bytes);
+                let alt_changed = pane.term.alternate_screen() != was_alt;
+                let mouse_changed = pane.term.wants_mouse() != was_mouse;
                 let events = pane.term.take_events();
+                let has_events = !events.is_empty();
                 self.vt_events(address, events);
+                if alt_changed {
+                    self.layout_dirty = true;
+                }
+                if mouse_changed && shown {
+                    let out_before = self.out.len();
+                    self.update_mouse_capture();
+                    if self.out.len() != out_before {
+                        self.dirty = true;
+                    }
+                }
+                if has_events {
+                    self.output_touched_chrome = true;
+                }
+                if shown || alt_changed || has_events {
+                    self.dirty = true;
+                }
             }
             Some(Output::Resize { .. }) => {}
             Some(Output::Closed(ending)) => {
                 pane.writer = None;
                 pane.led = None;
                 pane.focus_sent = None;
+                self.output_touched_chrome = true;
                 if ending.is_detach() {
                     pane.link = Link::Idle;
+                    if shown {
+                        self.dirty = true;
+                    }
                     return;
                 }
                 let reason = ending.reason.clone().unwrap_or_default();
                 if EXIT_REASONS.contains(&reason.as_str()) {
                     pane.end(Link::Ended(reason));
                     self.remove_terminal(address);
+                    self.dirty = true;
                 } else {
                     pane.end(Link::Lost(reason));
+                    if shown {
+                        self.dirty = true;
+                    }
                 }
             }
             None => {
                 pane.writer = None;
                 pane.link = Link::Idle;
+                self.output_touched_chrome = true;
+                if shown {
+                    self.dirty = true;
+                }
             }
         }
     }
@@ -423,8 +466,23 @@ impl App {
                 geoms.insert(key, geom);
             }
         }
-        let shown: HashSet<String> = active_tab
-            .as_ref()
+        let shown = self.shown_addresses(active_tab.as_deref(), &geoms);
+        let newly_shown_idle = self.apply_pane_layout(&sizes, &shown);
+        self.geoms = geoms;
+        self.regions = regions;
+        self.layout_dirty = false;
+        self.update_mouse_capture();
+        if newly_shown_idle {
+            self.attach_idle();
+        }
+    }
+
+    fn shown_addresses(
+        &self,
+        active_tab: Option<&str>,
+        geoms: &HashMap<String, crate::layout::TabGeom>,
+    ) -> HashSet<String> {
+        active_tab
             .and_then(|tab| {
                 let geom = geoms.get(tab)?;
                 let found = self.machines.tab(tab)?;
@@ -436,7 +494,14 @@ impl App {
                         .collect(),
                 )
             })
-            .unwrap_or_default();
+            .unwrap_or_default()
+    }
+
+    fn apply_pane_layout(
+        &mut self,
+        sizes: &HashMap<String, (u16, u16)>,
+        shown: &HashSet<String>,
+    ) -> bool {
         let online = self.conn.is_online();
         let focused = self
             .view
@@ -444,21 +509,25 @@ impl App {
             .and_then(|p| self.machines.pane(&p).and_then(|p| p.address()))
             .filter(|_| self.view.host_focused && online);
         let cell_px = self.host.cell_px;
+        let host_focused = self.view.host_focused;
+        let mut newly_shown_idle = false;
         for pane in self.panes.iter_mut() {
             if let Some(size) = sizes.get(&pane.address) {
                 pane.resize(*size, cell_px);
             }
+            let was_shown = pane.shown;
             pane.shown = online && shown.contains(&pane.address);
-            if pane.shown {
+            if pane.shown && !was_shown && pane.link == Link::Idle {
+                newly_shown_idle = true;
+            }
+            if pane.shown && host_focused {
                 pane.lead();
             } else {
                 pane.led = None;
             }
             pane.focus(focused.as_deref() == Some(pane.address.as_str()));
         }
-        self.geoms = geoms;
-        self.regions = regions;
-        self.update_mouse_capture();
+        newly_shown_idle
     }
 
     fn preview(&self, key: &str, tab: &doc::Tab) -> Option<doc::Tab> {

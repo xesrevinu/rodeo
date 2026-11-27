@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::time::{Duration, Instant};
 
 use config::TabBarEntry;
@@ -7,16 +7,31 @@ use hc::ExecParams;
 
 use super::App;
 use crate::ids::qualify;
+use crate::layout::SidebarWidth;
 use crate::machines::SpaceRef;
 
 const GIT_EVERY: Duration = Duration::from_secs(10);
+const INACTIVE_LOCAL_GIT_EVERY: Duration = Duration::from_secs(30);
+const INACTIVE_REMOTE_GIT_EVERY: Duration = Duration::from_secs(60);
 const FILES_EVERY: Duration = Duration::from_secs(5);
 const GIT_SCRIPT: &str = r#"cd "$1" 2>/dev/null || exit 1
-top=$(git rev-parse --show-toplevel 2>/dev/null) || exit 1
+out=$(git rev-parse --show-toplevel --git-common-dir --git-dir 2>/dev/null) || exit 1
+{
+  IFS= read -r top
+  IFS= read -r common
+  IFS= read -r gdir
+} <<EOF
+$out
+EOF
 printf '%s\n' "$top"
 git symbolic-ref --short -q HEAD 2>/dev/null || echo
-(cd "$(git rev-parse --git-common-dir)" 2>/dev/null && pwd -P) || echo
-(cd "$(git rev-parse --git-dir)" 2>/dev/null && pwd -P) || echo
+c=$(cd "$common" 2>/dev/null && pwd -P) || c=
+printf '%s\n' "$c"
+if [ "$common" = "$gdir" ]; then
+  printf '%s\n' "$c"
+else
+  (cd "$gdir" 2>/dev/null && pwd -P) || echo
+fi
 git rev-list --left-right --count 'HEAD...@{upstream}' 2>/dev/null || true"#;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -120,19 +135,29 @@ impl App {
     }
 
     fn refresh_git(&mut self) {
-        let kept: Vec<String> = self
+        let kept: HashSet<String> = self
             .machines
             .iter()
             .flat_map(|m| m.slot.doc().spaces.iter().map(|s| qualify(&s.id, m.key())))
             .collect();
         self.git.retain(|key, _| kept.contains(key));
+        let sidebar_hidden = matches!(self.sidebar_width(), SidebarWidth::Hidden);
+        let active_space = self.view.space.clone();
         let keys: Vec<String> = self.machines.spaces().iter().map(SpaceRef::key).collect();
         for key in keys {
             let Some((machine, cwd)) = self.space_cwd(&key) else {
                 continue;
             };
+            let is_active = active_space.as_deref() == Some(key.as_str());
+            let interval = if is_active {
+                GIT_EVERY
+            } else if machine.is_some() || sidebar_hidden {
+                INACTIVE_REMOTE_GIT_EVERY
+            } else {
+                INACTIVE_LOCAL_GIT_EVERY
+            };
             let due = self.git.get(&key).is_none_or(|g| {
-                !g.pending && (g.cwd != cwd || g.at.is_none_or(|at| at.elapsed() >= GIT_EVERY))
+                !g.pending && (g.cwd != cwd || g.at.is_none_or(|at| at.elapsed() >= interval))
             });
             if !due {
                 continue;
@@ -153,7 +178,7 @@ impl App {
                 timeout: Some(Duration::from_secs(5)),
                 ..ExecParams::default()
             };
-            self.spawn(async move {
+            self.spawn_quiet(async move {
                 let result = client.exec(&params).await;
                 move |app: &mut App| {
                     let git = match result {
@@ -166,7 +191,19 @@ impl App {
                             ..Git::default()
                         },
                     };
+                    let changed = app.git.get(&key).is_none_or(|old| {
+                        old.cwd != git.cwd
+                            || old.toplevel != git.toplevel
+                            || old.branch != git.branch
+                            || old.common != git.common
+                            || old.linked != git.linked
+                            || old.ahead != git.ahead
+                            || old.behind != git.behind
+                    });
                     app.git.insert(key, git);
+                    if changed {
+                        app.dirty = true;
+                    }
                 }
             });
         }
@@ -221,7 +258,7 @@ impl App {
                 timeout: Some(Duration::from_secs(5)),
                 ..ExecParams::default()
             };
-            self.spawn(async move {
+            self.spawn_quiet(async move {
                 let result = client.exec(&params).await;
                 move |app: &mut App| {
                     let listing = match result {
@@ -241,7 +278,13 @@ impl App {
                             ..Listing::default()
                         },
                     };
+                    let changed = app.files.map.get(&target).is_none_or(|old| {
+                        old.entries != listing.entries || old.error != listing.error
+                    });
                     app.files.map.insert(target, listing);
+                    if changed {
+                        app.dirty = true;
+                    }
                 }
             });
         }
@@ -290,7 +333,7 @@ impl App {
                 timeout: Some(Duration::from_secs(timeout)),
                 ..ExecParams::default()
             };
-            self.spawn(async move {
+            self.spawn_quiet(async move {
                 let result = client.exec(&params).await;
                 move |app: &mut App| {
                     let text = match result {
@@ -299,9 +342,17 @@ impl App {
                         }
                         _ => String::new(),
                     };
+                    let changed = app
+                        .status
+                        .commands
+                        .get(&index)
+                        .is_none_or(|(old, _, _)| *old != text);
                     app.status
                         .commands
                         .insert(index, (text, Some(Instant::now()), false));
+                    if changed {
+                        app.dirty = true;
+                    }
                 }
             });
         }

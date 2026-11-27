@@ -161,7 +161,6 @@ impl App {
             self.view.mode = crate::view::Mode::Navigate;
         }
         self.sync_panes();
-        self.relayout();
         self.dirty = true;
     }
 

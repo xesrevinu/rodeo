@@ -70,10 +70,10 @@
 # headless_rows = 40
 
 [update]
-# rodeo does not update itself. These keys are read and ignored.
+# rodeo never checks for or performs automatic updates. These keys are accepted for compatibility and ignored.
 # channel = "stable"
-# version_check = true
-# manifest_check = true
+# version_check = false
+# manifest_check = false
 
 [keys]
 # A key is a list of modifiers and one key, joined with "+".

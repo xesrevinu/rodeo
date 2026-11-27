@@ -32,6 +32,12 @@ pub fn draw(app: &mut App, frame: &mut Frame) {
     let area = frame.area();
     app.fit(area);
     let snapshot = app.snapshot();
+    draw_with_snapshot(app, frame, &snapshot);
+}
+
+pub fn draw_with_snapshot(app: &mut App, frame: &mut Frame, snapshot: &crate::model::Snapshot) {
+    let area = frame.area();
+    app.fit(area);
     let mut hits = Hits {
         surface: app.regions.surface,
         ..Hits::default()
@@ -40,11 +46,11 @@ pub fn draw(app: &mut App, frame: &mut Frame) {
     let buf = frame.buffer_mut();
     let online = app.conn.is_online();
     if let Some(header) = regions.header {
-        mobile::header(app, &snapshot, buf, header);
+        mobile::header(app, snapshot, buf, header);
     }
-    hits.sidebar = sidebar::draw(app, &snapshot, buf, regions.sidebar);
+    hits.sidebar = sidebar::draw(app, snapshot, buf, regions.sidebar);
     if let Some(tab_bar) = regions.tab_bar {
-        tabs::render(app, &snapshot, buf, tab_bar, &mut hits);
+        tabs::render(app, snapshot, buf, tab_bar, &mut hits);
     }
     let mut cursor = None;
     if online && snapshot.active_tab.is_some() {
@@ -66,7 +72,7 @@ pub fn draw(app: &mut App, frame: &mut Frame) {
     }
     toast::render(app, buf, area, &mut hits);
     if app.switcher_open() {
-        hits.switcher = crate::switcher::render(app, &snapshot, buf, area);
+        hits.switcher = crate::switcher::render(app, snapshot, buf, area);
         hits.covers.push(area);
     }
     if !app.config.ui.mouse_capture {
@@ -80,7 +86,7 @@ pub fn draw(app: &mut App, frame: &mut Frame) {
             palette: &app.palette,
             keymap: &app.keymap,
             config: &app.config,
-            snapshot: &snapshot,
+            snapshot,
         };
         let drawn = open.render(area, buf, &ctx);
         hits.covers.extend(drawn.map(|d| d.area));

@@ -99,14 +99,18 @@ pub(crate) fn host(color: Color) -> HostColor {
     }
 }
 
-pub(crate) fn attributes(modifier: Modifier) -> impl Iterator<Item = Attribute> {
-    let underline = UnderlineStyle::of(modifier).map(|style| match style {
+fn underline_attribute(style: UnderlineStyle) -> Attribute {
+    match style {
         UnderlineStyle::Single => Attribute::Underlined,
         UnderlineStyle::Double => Attribute::DoubleUnderlined,
         UnderlineStyle::Curly => Attribute::Undercurled,
         UnderlineStyle::Dotted => Attribute::Underdotted,
         UnderlineStyle::Dashed => Attribute::Underdashed,
-    });
+    }
+}
+
+pub(crate) fn attributes(modifier: Modifier) -> impl Iterator<Item = Attribute> {
+    let underline = UnderlineStyle::of(modifier).map(underline_attribute);
     [
         (Modifier::BOLD, Attribute::Bold),
         (Modifier::DIM, Attribute::Dim),
@@ -123,8 +127,76 @@ pub(crate) fn attributes(modifier: Modifier) -> impl Iterator<Item = Attribute> 
     .chain(underline)
 }
 
+fn write_modifier_diff<W: Write>(out: &mut W, from: Modifier, to: Modifier) -> io::Result<()> {
+    let removed = from - to;
+    let added = to - from;
+
+    let intensity_reset = removed.intersects(Modifier::BOLD | Modifier::DIM);
+    if intensity_reset {
+        queue!(out, SetAttribute(Attribute::NormalIntensity))?;
+    }
+    if removed.contains(Modifier::ITALIC) {
+        queue!(out, SetAttribute(Attribute::NoItalic))?;
+    }
+    if removed.contains(Modifier::UNDERLINED) {
+        queue!(out, SetAttribute(Attribute::NoUnderline))?;
+    }
+    let blink_reset = removed.intersects(Modifier::SLOW_BLINK | Modifier::RAPID_BLINK);
+    if blink_reset {
+        queue!(out, SetAttribute(Attribute::NoBlink))?;
+    }
+    if removed.contains(Modifier::REVERSED) {
+        queue!(out, SetAttribute(Attribute::NoReverse))?;
+    }
+    if removed.contains(Modifier::HIDDEN) {
+        queue!(out, SetAttribute(Attribute::NoHidden))?;
+    }
+    if removed.contains(Modifier::CROSSED_OUT) {
+        queue!(out, SetAttribute(Attribute::NotCrossedOut))?;
+    }
+
+    if (intensity_reset && to.contains(Modifier::BOLD)) || added.contains(Modifier::BOLD) {
+        queue!(out, SetAttribute(Attribute::Bold))?;
+    }
+    if (intensity_reset && to.contains(Modifier::DIM)) || added.contains(Modifier::DIM) {
+        queue!(out, SetAttribute(Attribute::Dim))?;
+    }
+    if added.contains(Modifier::ITALIC) {
+        queue!(out, SetAttribute(Attribute::Italic))?;
+    }
+    if (blink_reset && to.contains(Modifier::SLOW_BLINK)) || added.contains(Modifier::SLOW_BLINK) {
+        queue!(out, SetAttribute(Attribute::SlowBlink))?;
+    }
+    if (blink_reset && to.contains(Modifier::RAPID_BLINK)) || added.contains(Modifier::RAPID_BLINK)
+    {
+        queue!(out, SetAttribute(Attribute::RapidBlink))?;
+    }
+    if added.contains(Modifier::REVERSED) {
+        queue!(out, SetAttribute(Attribute::Reverse))?;
+    }
+    if added.contains(Modifier::HIDDEN) {
+        queue!(out, SetAttribute(Attribute::Hidden))?;
+    }
+    if added.contains(Modifier::CROSSED_OUT) {
+        queue!(out, SetAttribute(Attribute::CrossedOut))?;
+    }
+    let from_ul = UnderlineStyle::of(from);
+    let to_ul = UnderlineStyle::of(to);
+    if to_ul != from_ul
+        && let Some(style) = to_ul
+    {
+        queue!(out, SetAttribute(underline_attribute(style)))?;
+    }
+    Ok(())
+}
+
 fn symbol_width(cell: &Cell) -> u16 {
-    u16::try_from(unicode_width::UnicodeWidthStr::width(cell.symbol())).unwrap_or(u16::MAX)
+    let s = cell.symbol();
+    let bytes = s.as_bytes();
+    if bytes.len() == 1 && (bytes[0].is_ascii_graphic() || bytes[0] == b' ') {
+        return 1;
+    }
+    u16::try_from(unicode_width::UnicodeWidthStr::width(s)).unwrap_or(u16::MAX)
 }
 
 impl<W: Write> Backend for HostBackend<W> {
@@ -145,25 +217,42 @@ impl<W: Write> Backend for HostBackend<W> {
                 queue!(out, MoveTo(x, y))?;
             }
             last = Some((x, y));
-            if cell.modifier != modifier {
-                queue!(out, SetAttribute(Attribute::Reset))?;
-                for attribute in attributes(cell.modifier) {
-                    queue!(out, SetAttribute(attribute))?;
+            if cell.modifier == modifier {
+                if cell.fg != fg {
+                    queue!(out, SetForegroundColor(host(cell.fg)))?;
+                    fg = cell.fg;
                 }
-                modifier = cell.modifier;
+                if cell.bg != bg {
+                    queue!(out, SetBackgroundColor(host(cell.bg)))?;
+                    bg = cell.bg;
+                }
+                if cell.underline_color != underline {
+                    queue!(out, SetUnderlineColor(host(cell.underline_color)))?;
+                    underline = cell.underline_color;
+                }
+            } else if cell.modifier.is_empty()
+                && cell.fg == Color::Reset
+                && cell.bg == Color::Reset
+                && cell.underline_color == Color::Reset
+            {
+                queue!(out, SetAttribute(Attribute::Reset))?;
+                modifier = Modifier::empty();
                 (fg, bg, underline) = (Color::Reset, Color::Reset, Color::Reset);
-            }
-            if cell.fg != fg {
-                queue!(out, SetForegroundColor(host(cell.fg)))?;
-                fg = cell.fg;
-            }
-            if cell.bg != bg {
-                queue!(out, SetBackgroundColor(host(cell.bg)))?;
-                bg = cell.bg;
-            }
-            if cell.underline_color != underline {
-                queue!(out, SetUnderlineColor(host(cell.underline_color)))?;
-                underline = cell.underline_color;
+            } else {
+                if cell.fg != fg {
+                    queue!(out, SetForegroundColor(host(cell.fg)))?;
+                    fg = cell.fg;
+                }
+                if cell.bg != bg {
+                    queue!(out, SetBackgroundColor(host(cell.bg)))?;
+                    bg = cell.bg;
+                }
+                if cell.underline_color != underline {
+                    queue!(out, SetUnderlineColor(host(cell.underline_color)))?;
+                    underline = cell.underline_color;
+                }
+                write_modifier_diff(out, modifier, cell.modifier)?;
+                modifier = cell.modifier;
             }
             queue!(out, Print(cell.symbol()))?;
             self.cursor = Position::new(x.saturating_add(symbol_width(cell)), y);
@@ -361,7 +450,19 @@ mod tests {
         let out = drawn(&[cell("a", red), cell("b", red), cell("c", Style::new())]);
         assert_eq!(
             out,
-            "\x1b[1;1H\x1b[0m\x1b[1m\x1b[38;5;1mab\x1b[0mc\x1b[39m\x1b[49m\x1b[59m\x1b[0m"
+            "\x1b[1;1H\x1b[38;5;1m\x1b[1mab\x1b[0mc\x1b[39m\x1b[49m\x1b[59m\x1b[0m"
         );
+    }
+
+    #[test]
+    fn modifier_changes_preserve_rgb_colors_without_reset() {
+        let base = Style::new()
+            .fg(Color::Rgb(10, 20, 30))
+            .bg(Color::Rgb(40, 50, 60));
+        let bold = base.add_modifier(Modifier::BOLD);
+        let out = drawn(&[cell("a", bold), cell("b", base)]);
+        assert_eq!(out.matches("\x1b[38;2;10;20;30m").count(), 1, "{out:?}");
+        assert_eq!(out.matches("\x1b[48;2;40;50;60m").count(), 1, "{out:?}");
+        assert!(out.contains("a\x1b[22mb"), "{out:?}");
     }
 }

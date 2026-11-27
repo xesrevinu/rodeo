@@ -33,9 +33,6 @@ pub enum MachineOp {
     Login {
         machine: String,
     },
-    Update {
-        machine: String,
-    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -45,7 +42,6 @@ enum Key {
     Remove,
     Connect,
     Login,
-    Update,
     Menu,
     Close,
 }
@@ -53,7 +49,6 @@ enum Key {
 const ACTIONS: &[(&str, char, Key)] = &[
     ("reconnect", 'c', Key::Connect),
     ("log in again", 'l', Key::Login),
-    ("update hc there", 'u', Key::Update),
     ("rename", 'r', Key::Rename),
     ("remove", 'x', Key::Remove),
 ];
@@ -258,12 +253,6 @@ impl MachineManager {
                 },
                 format!("logging in to {machine}…"),
             ),
-            Key::Update => (
-                MachineOp::Update {
-                    machine: machine.clone(),
-                },
-                format!("updating {machine}…"),
-            ),
             Key::Add | Key::Close | Key::Menu => return Outcome::Stay,
         };
         self.busy = Some(busy);
@@ -287,7 +276,6 @@ impl MachineManager {
                     Some('x') => Key::Remove,
                     Some('c') => Key::Connect,
                     Some('l') => Key::Login,
-                    Some('u') => Key::Update,
                     _ => return Outcome::Stay,
                 };
                 return self.act(key, list);
@@ -890,7 +878,7 @@ mod tests {
             }))
         );
         assert!(manager.is_busy());
-        assert_eq!(manager.act(Key::Update, &list), Outcome::Stay);
+        assert_eq!(manager.act(Key::Login, &list), Outcome::Stay);
     }
 
     #[test]

@@ -48,6 +48,10 @@ pub enum Msg {
         generation: Option<u64>,
         apply: Apply,
     },
+    QuietApply {
+        generation: Option<u64>,
+        apply: Apply,
+    },
     Tick,
     Quit,
 }
@@ -143,6 +147,8 @@ pub struct App {
     pub tx: UnboundedSender<Msg>,
     pub quit: bool,
     pub dirty: bool,
+    pub layout_dirty: bool,
+    pub(crate) output_touched_chrome: bool,
     pub ticks: u64,
     pub full_redraw: bool,
     born: HashMap<String, Instant>,
@@ -207,6 +213,8 @@ impl App {
             tx,
             quit: false,
             dirty: true,
+            layout_dirty: true,
+            output_touched_chrome: false,
             ticks: 0,
             full_redraw: false,
             born: HashMap::new(),
@@ -260,12 +268,17 @@ impl App {
             Msg::Apply { generation, apply } => {
                 if generation.is_none_or(|g| g == self.conn.generation) {
                     apply(self);
+                    self.dirty = true;
+                }
+            }
+            Msg::QuietApply { generation, apply } => {
+                if generation.is_none_or(|g| g == self.conn.generation) {
+                    apply(self);
                 }
             }
             Msg::Tick => self.tick(),
             Msg::Quit => self.quit = true,
         }
-        self.dirty = true;
     }
 
     pub fn spawn<F, R>(&self, future: F)
@@ -278,6 +291,22 @@ impl App {
         tokio::task::spawn_local(async move {
             let apply = future.await;
             let _ = tx.send(Msg::Apply {
+                generation,
+                apply: Box::new(apply),
+            });
+        });
+    }
+
+    pub fn spawn_quiet<F, R>(&self, future: F)
+    where
+        F: Future<Output = R> + 'static,
+        R: FnOnce(&mut App) + 'static,
+    {
+        let tx = self.tx.clone();
+        let generation = Some(self.conn.generation);
+        tokio::task::spawn_local(async move {
+            let apply = future.await;
+            let _ = tx.send(Msg::QuietApply {
                 generation,
                 apply: Box::new(apply),
             });
@@ -336,19 +365,27 @@ impl App {
     fn tick(&mut self) {
         self.ticks += 1;
         let now = Instant::now();
+        let mut changed = false;
         if self.feedback.as_ref().is_some_and(|f| f.until <= now) {
             self.feedback = None;
+            changed = true;
         }
         if self.notice.as_ref().is_some_and(|n| n.until <= now) {
             self.next_notice();
+            changed = true;
         }
         if self.error.as_ref().is_some_and(|(_, until)| *until <= now) {
             self.error = None;
+            changed = true;
         }
         if let Some(selection) = &self.view.selection
             && selection.clear_at.is_some_and(|at| at <= now)
         {
             self.view.selection = None;
+            changed = true;
+        }
+        if changed {
+            self.dirty = true;
         }
         self.born
             .retain(|_, at| now.duration_since(*at) < Duration::from_secs(30));

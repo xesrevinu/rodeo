@@ -84,11 +84,26 @@ pub struct Rendered {
     pub cursor: Option<Cursor>,
 }
 
+struct BaseColors {
+    palette: Palette,
+    fg: Option<RgbColor>,
+    bg: Option<RgbColor>,
+}
+
+struct FrameCache {
+    generation: u64,
+    size: (u16, u16),
+    cells: Vec<Cell>,
+    cursor: Option<Cursor>,
+}
+
 pub(crate) struct Renderer {
     state: RenderState<'static>,
     rows: RowIterator<'static>,
     cells: CellIterator<'static>,
     text: String,
+    base: Option<BaseColors>,
+    cache: Option<FrameCache>,
 }
 
 struct Colors {
@@ -96,35 +111,31 @@ struct Colors {
     bg: Color,
     palette: Palette,
     changed: [bool; 256],
+    custom_palette: bool,
 }
 
 impl Colors {
-    fn new(vt: &Vt) -> Self {
+    fn new(vt: &Vt, base: &BaseColors) -> Self {
         let palette = vt
             .color_palette()
             .unwrap_or(Palette([RgbColor::default(); 256]));
-        let base = vt
-            .default_color_palette()
-            .unwrap_or(Palette([RgbColor::default(); 256]));
+        let custom_palette = palette.0 != base.palette.0;
         let mut changed = [false; 256];
-        for (i, flag) in changed.iter_mut().enumerate() {
-            *flag = palette.0[i] != base.0[i];
+        if custom_palette {
+            for (i, flag) in changed.iter_mut().enumerate() {
+                *flag = palette.0[i] != base.palette.0[i];
+            }
         }
         let fixed = |current: Option<RgbColor>, default: Option<RgbColor>| match current {
             Some(color) if Some(color) != default => rgb(color),
             _ => Color::Reset,
         };
         Self {
-            fg: fixed(
-                vt.fg_color().ok().flatten(),
-                vt.default_fg_color().ok().flatten(),
-            ),
-            bg: fixed(
-                vt.bg_color().ok().flatten(),
-                vt.default_bg_color().ok().flatten(),
-            ),
+            fg: fixed(vt.fg_color().ok().flatten(), base.fg),
+            bg: fixed(vt.bg_color().ok().flatten(), base.bg),
             palette,
             changed,
+            custom_palette,
         }
     }
 
@@ -137,7 +148,7 @@ impl Colors {
     }
 
     fn indexed(&self, index: u8) -> Color {
-        if self.changed[usize::from(index)] {
+        if self.custom_palette && self.changed[usize::from(index)] {
             rgb(self.palette.0[usize::from(index)])
         } else {
             Color::Indexed(index)
@@ -152,6 +163,8 @@ impl Renderer {
             rows: RowIterator::new()?,
             cells: CellIterator::new()?,
             text: String::with_capacity(16),
+            base: None,
+            cache: None,
         })
     }
 
@@ -165,6 +178,54 @@ impl Renderer {
         )
     }
 
+    fn draw_cached(
+        &mut self,
+        vt: &Vt,
+        area: Rect,
+        buf: &mut Buffer,
+        scrolled: bool,
+        generation: u64,
+    ) -> Result<Option<Cursor>, Error> {
+        let size = (area.width, area.height);
+        if let Some(cache) = &self.cache
+            && cache.generation == generation
+            && cache.size == size
+        {
+            blit(&cache.cells, area, buf);
+            return Ok(cache.cursor.map(|cursor| Cursor {
+                x: area.x + cursor.x,
+                y: area.y + cursor.y,
+                ..cursor
+            }));
+        }
+        let cursor = self.draw(vt, area, buf, scrolled)?;
+        let relative = cursor.map(|c| Cursor {
+            x: c.x - area.x,
+            y: c.y - area.y,
+            ..c
+        });
+        let total = usize::from(area.width) * usize::from(area.height);
+        let mut cells = self
+            .cache
+            .take()
+            .map_or_else(|| Vec::with_capacity(total), |c| c.cells);
+        cells.clear();
+        cells.reserve(total.saturating_sub(cells.capacity()));
+        for row in 0..area.height {
+            let y = area.y + row;
+            for col in 0..area.width {
+                cells.push(buf[(area.x + col, y)].clone());
+            }
+        }
+        self.cache = Some(FrameCache {
+            generation,
+            size,
+            cells,
+            cursor: relative,
+        });
+        Ok(cursor)
+    }
+
     fn draw(
         &mut self,
         vt: &Vt,
@@ -172,12 +233,20 @@ impl Renderer {
         buf: &mut Buffer,
         scrolled: bool,
     ) -> Result<Option<Cursor>, Error> {
-        let colors = Colors::new(vt);
+        let base = self.base.get_or_insert_with(|| BaseColors {
+            palette: vt
+                .default_color_palette()
+                .unwrap_or(Palette([RgbColor::default(); 256])),
+            fg: vt.default_fg_color().ok().flatten(),
+            bg: vt.default_bg_color().ok().flatten(),
+        });
+        let colors = Colors::new(vt, base);
         let Self {
             state,
             rows,
             cells,
             text,
+            ..
         } = self;
         let snapshot = state.update(vt)?;
         let (cols, height) = (snapshot.cols()?, snapshot.rows()?);
@@ -207,20 +276,7 @@ impl Renderer {
                     CellContentTag::BgColorRgb => style.bg(rgb(raw.bg_color_rgb()?)),
                     _ => style,
                 };
-                let modifier = [
-                    (vt_style.bold, Modifier::BOLD),
-                    (vt_style.faint, Modifier::DIM),
-                    (vt_style.italic, Modifier::ITALIC),
-                    (vt_style.underline != Underline::None, Modifier::UNDERLINED),
-                    (vt_style.blink, Modifier::SLOW_BLINK),
-                    (vt_style.inverse, Modifier::REVERSED),
-                    (vt_style.invisible, Modifier::HIDDEN),
-                    (vt_style.strikethrough, Modifier::CROSSED_OUT),
-                ]
-                .into_iter()
-                .filter(|(on, _)| *on)
-                .fold(Modifier::empty(), |out, (_, flag)| out | flag);
-                style = style.add_modifier(UnderlineStyle::mark(vt_style.underline, modifier));
+                style = style.add_modifier(vt_modifier(&vt_style));
                 text.clear();
                 cell.graphemes_utf8(text)?;
                 let target = &mut buf[(area.x + x, area.y + y)];
@@ -265,12 +321,56 @@ impl Renderer {
     }
 }
 
+fn vt_modifier(vt_style: &libghostty_vt::style::Style) -> Modifier {
+    let mut modifier = Modifier::empty();
+    if vt_style.bold {
+        modifier |= Modifier::BOLD;
+    }
+    if vt_style.faint {
+        modifier |= Modifier::DIM;
+    }
+    if vt_style.italic {
+        modifier |= Modifier::ITALIC;
+    }
+    if vt_style.underline != Underline::None {
+        modifier |= Modifier::UNDERLINED;
+    }
+    if vt_style.blink {
+        modifier |= Modifier::SLOW_BLINK;
+    }
+    if vt_style.inverse {
+        modifier |= Modifier::REVERSED;
+    }
+    if vt_style.invisible {
+        modifier |= Modifier::HIDDEN;
+    }
+    if vt_style.strikethrough {
+        modifier |= Modifier::CROSSED_OUT;
+    }
+    UnderlineStyle::mark(vt_style.underline, modifier)
+}
+
+fn blit(cells: &[Cell], area: Rect, buf: &mut Buffer) {
+    let width = usize::from(area.width);
+    for row in 0..area.height {
+        let y = area.y + row;
+        let offset = usize::from(row) * width;
+        for col in 0..area.width {
+            buf[(area.x + col, y)] = cells[offset + usize::from(col)].clone();
+        }
+    }
+}
+
 fn symbol(target: &mut Cell, text: &str, width: u16) {
     if text.is_empty() || text.starts_with('\u{10EEEE}') {
         target.set_symbol(" ");
         return;
     }
     target.set_symbol(text);
+    let bytes = text.as_bytes();
+    if width == 1 && bytes.len() == 1 && (bytes[0].is_ascii_graphic() || bytes[0] == b' ') {
+        return;
+    }
     if text.width() != usize::from(width) {
         target.set_diff_option(CellDiffOption::ForcedWidth(
             NonZeroU16::new(width).unwrap_or(NonZeroU16::MIN),
@@ -281,11 +381,14 @@ fn symbol(target: &mut Cell, text: &str, width: u16) {
 impl Terminal {
     pub fn render(&self, area: Rect, buf: &mut Buffer, options: &RenderOptions<'_>) -> Rendered {
         let area = area.intersection(buf.area);
+        if area.is_empty() {
+            return Rendered::default();
+        }
         let scrolled = self.is_scrolled_back();
         let cursor = self
             .renderer()
             .borrow_mut()
-            .draw(self.vt(), area, buf, scrolled)
+            .draw_cached(self.vt(), area, buf, scrolled, self.render_gen())
             .ok()
             .flatten();
         let (cols, rows) = self.size();

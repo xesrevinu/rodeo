@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::collections::hash_map::DefaultHasher;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Write as _;
@@ -254,20 +255,25 @@ fn delete_placement(out: &mut String, id: u32, placement: u32) {
 }
 
 pub fn upload(out: &mut String, id: u32, image: &vt::Image) {
-    let (format, data) = match image.format {
-        ImageFormat::Rgb => (24, image.data.clone()),
-        ImageFormat::Rgba => (32, image.data.clone()),
-        ImageFormat::Png => (100, image.data.clone()),
-        ImageFormat::Gray => (24, image.data.iter().flat_map(|&g| [g, g, g]).collect()),
+    let (format, data): (u8, Cow<'_, [u8]>) = match image.format {
+        ImageFormat::Rgb => (24, Cow::Borrowed(&image.data)),
+        ImageFormat::Rgba => (32, Cow::Borrowed(&image.data)),
+        ImageFormat::Png => (100, Cow::Borrowed(&image.data)),
+        ImageFormat::Gray => (
+            24,
+            Cow::Owned(image.data.iter().flat_map(|&g| [g, g, g]).collect()),
+        ),
         ImageFormat::GrayAlpha => (
             32,
-            image
-                .data
-                .as_chunks::<2>()
-                .0
-                .iter()
-                .flat_map(|&[g, a]| [g, g, g, a])
-                .collect(),
+            Cow::Owned(
+                image
+                    .data
+                    .as_chunks::<2>()
+                    .0
+                    .iter()
+                    .flat_map(|&[g, a]| [g, g, g, a])
+                    .collect(),
+            ),
         ),
     };
     let control = format!(
@@ -348,7 +354,6 @@ impl App {
             height: h,
         };
         let mut wanted = Vec::new();
-        let mut sizes: HashMap<(String, u32), (u32, u32)> = HashMap::new();
         for hit in self.hits.panes.iter().filter(|_| !hidden) {
             let Some(address) = &hit.address else {
                 continue;
@@ -357,16 +362,10 @@ impl App {
                 continue;
             };
             for placement in pane.term.graphics().placements {
-                let key = (address.clone(), placement.image);
-                let size = if let Some(size) = sizes.get(&key) {
-                    *size
-                } else {
-                    let Some(image) = pane.term.image(placement.image) else {
-                        continue;
-                    };
-                    sizes.insert(key, (image.width, image.height));
-                    (image.width, image.height)
-                };
+                if placement.image_width == 0 || placement.image_height == 0 {
+                    continue;
+                }
+                let size = (placement.image_width, placement.image_height);
                 let host = host_image_id(address, placement.image);
                 for (index, piece) in pieces(&placement, size, hit.content, cell, covers)
                     .into_iter()
@@ -387,6 +386,9 @@ impl App {
                     });
                 }
             }
+        }
+        if wanted.is_empty() && self.graphics.images.is_empty() && self.graphics.placed.is_empty() {
+            return;
         }
         let bytes = self.graphics_bytes(&wanted);
         if !bytes.is_empty() {
@@ -421,7 +423,7 @@ impl App {
                     && self
                         .panes
                         .get(address)
-                        .is_none_or(|p| p.term.image(*image).is_none())
+                        .is_none_or(|p| !p.term.has_image(*image))
             })
             .map(|(id, _)| *id)
             .collect();
@@ -466,6 +468,8 @@ mod tests {
             image: 7,
             placement: 3,
             image_generation: 1,
+            image_width: 30,
+            image_height: 30,
             z: 0,
             col,
             row,

@@ -501,7 +501,6 @@ fn the_manager_lists_every_machine_with_its_state() {
         for (action, key) in [
             ("reconnect", "c"),
             ("log in again", "l"),
-            ("update hc there", "u"),
             ("rename", "r"),
             ("remove", "x"),
         ] {
@@ -512,9 +511,13 @@ fn the_manager_lists_every_machine_with_its_state() {
             let line = line.trim_end_matches(['│', ' ']);
             assert!(line.ends_with(&format!(" {key}")), "{line}");
         }
+        assert!(
+            !text.contains("update hc there"),
+            "remote updates are disabled\n{text}"
+        );
         h.press(KeyCode::Esc, KeyModifiers::NONE).await;
         assert!(
-            !overlay_text(&mut h).contains("update hc there"),
+            !overlay_text(&mut h).contains("log in again"),
             "esc closes the menu"
         );
         assert_eq!(kind(&h), Some(Kind::Machines));
@@ -571,7 +574,7 @@ fn the_manager_fits_a_narrow_screen() {
         let screen = h.screen();
         let menu: Vec<&str> = screen
             .lines()
-            .filter(|l| l.contains("update hc there"))
+            .filter(|l| l.contains("log in again"))
             .collect();
         assert_eq!(menu.len(), 1, "{screen}");
         assert!(text.contains("remove"), "{text}");
@@ -690,7 +693,7 @@ fn a_failed_rename_shows_hcs_error_in_the_manager() {
 }
 
 #[test]
-fn login_and_update_run_this_hc_against_this_core() {
+fn login_runs_this_hc_against_this_core_and_update_is_disabled() {
     run(|| async {
         let mut h = Harness::start().await;
         h.ready().await;
@@ -698,35 +701,40 @@ fn login_and_update_run_this_hc_against_this_core() {
         until_online(&mut h, &["box"]).await;
         let seen = watch_popups(&h).await;
         let bin = h.core.bin().display().to_string();
-        for (key, verb) in [('l', "login"), ('u', "update")] {
-            open_manager(&mut h).await;
-            pick(&mut h, "box").await;
-            h.press(KeyCode::Char(key), KeyModifiers::NONE).await;
-            let ran = |argv: &[String]| hc_args(argv).get(2).map(String::as_str) == Some(verb);
-            h.until("its exit", |_| {
-                seen.borrow()
-                    .values()
-                    .any(|(argv, code)| ran(argv) && code.is_some())
-            })
-            .await;
-            h.until("the popup to close", |h| {
-                h.app().popup.is_none() && kind(h) == Some(Kind::Machines)
-            })
-            .await;
-            let (argv, code) = seen
-                .borrow()
+        open_manager(&mut h).await;
+        pick(&mut h, "box").await;
+        h.press(KeyCode::Char('u'), KeyModifiers::NONE).await;
+        h.pump().await;
+        assert!(h.app().popup.is_none(), "u must not launch hc machine update");
+        assert!(
+            seen.borrow().is_empty(),
+            "u must not spawn any remote update process"
+        );
+        h.press(KeyCode::Char('l'), KeyModifiers::NONE).await;
+        let ran = |argv: &[String]| hc_args(argv).get(2).map(String::as_str) == Some("login");
+        h.until("its exit", |_| {
+            seen.borrow()
                 .values()
-                .find(|(argv, _)| ran(argv))
-                .cloned()
-                .expect("the popup terminal");
-            assert_eq!(&argv[..2], ["/bin/sh", "-c"]);
-            assert_eq!(argv[3], "sh");
-            assert_eq!(hc_args(&argv), [bin.as_str(), "machine", verb, "box"]);
-            assert_eq!(code, Some(0), "hc {verb} box ran against the test core");
-            assert_eq!(picked(&mut h).as_deref(), Some("box"));
-            assert_eq!(manager_error(&mut h), None);
-            h.press(KeyCode::Esc, KeyModifiers::NONE).await;
-        }
+                .any(|(argv, code)| ran(argv) && code.is_some())
+        })
+        .await;
+        h.until("the popup to close", |h| {
+            h.app().popup.is_none() && kind(h) == Some(Kind::Machines)
+        })
+        .await;
+        let (argv, code) = seen
+            .borrow()
+            .values()
+            .find(|(argv, _)| ran(argv))
+            .cloned()
+            .expect("the popup terminal");
+        assert_eq!(&argv[..2], ["/bin/sh", "-c"]);
+        assert_eq!(argv[3], "sh");
+        assert_eq!(hc_args(&argv), [bin.as_str(), "machine", "login", "box"]);
+        assert_eq!(code, Some(0), "hc login box ran against the test core");
+        assert_eq!(picked(&mut h).as_deref(), Some("box"));
+        assert_eq!(manager_error(&mut h), None);
+        h.press(KeyCode::Esc, KeyModifiers::NONE).await;
         until_online(&mut h, &["box"]).await;
     });
 }

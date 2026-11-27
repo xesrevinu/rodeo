@@ -109,12 +109,6 @@ impl App {
                 picked: Some(machine),
                 seek: None,
             }),
-            MachineOp::Update { machine } => self.machine_popup(Run {
-                title: format!("update {machine}"),
-                args: vec!["machine".into(), "update".into(), machine.clone()],
-                picked: Some(machine),
-                seek: None,
-            }),
         }
     }
 

@@ -236,3 +236,22 @@ fn highlights_patch_absolute_ranges() {
     assert!(buf[(1, 2)].modifier.contains(Modifier::BOLD));
     assert!(!buf[(2, 2)].modifier.contains(Modifier::BOLD));
 }
+
+#[test]
+fn cached_render_reuses_cells_and_updates_after_mutations() {
+    let mut t = term(10, 2);
+    t.feed(b"hello");
+    let first = draw(&t, Rect::new(0, 0, 10, 2));
+    let second = draw(&t, Rect::new(0, 0, 10, 2));
+    assert_eq!(first, second);
+    assert_eq!(text(&second.0, 0, 0, 5), "hello");
+
+    let mut moved = Buffer::empty(Rect::new(0, 0, 14, 4));
+    let rendered = t.render(Rect::new(2, 1, 10, 2), &mut moved, &RenderOptions::default());
+    assert_eq!(text(&moved, 1, 2, 7), "hello");
+    assert_eq!(rendered.cursor.map(|c| (c.x, c.y)), Some((7, 1)));
+
+    t.feed(b" world");
+    let updated = draw(&t, Rect::new(0, 0, 10, 2));
+    assert_eq!(text(&updated.0, 0, 0, 10), "hello worl");
+}

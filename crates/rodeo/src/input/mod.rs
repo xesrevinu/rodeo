@@ -3,7 +3,7 @@ mod keys;
 mod mouse;
 mod sidebar;
 
-use crossterm::event::Event;
+use crossterm::event::{Event, MouseEventKind};
 use ratatui::layout::Rect;
 
 use crate::app::App;
@@ -17,20 +17,50 @@ impl App {
                 self.error = None;
                 self.links.hover = None;
                 self.key(key);
+                self.dirty = true;
             }
             Event::Mouse(mouse) => {
-                self.error = None;
-                self.mouse(mouse);
+                let quiet_move = mouse.kind == MouseEventKind::Moved
+                    && self.view.drag.is_none()
+                    && self.view.overlay.is_none()
+                    && self.popup.is_none()
+                    && !self.switcher_open();
+                if quiet_move {
+                    let had_error = self.error.take().is_some();
+                    let prev_link = self.links.hover.clone();
+                    let prev_sidebar = self.view.sidebar.hover.clone();
+                    self.mouse(mouse);
+                    if had_error
+                        || self.links.hover != prev_link
+                        || self.view.sidebar.hover != prev_sidebar
+                        || self.error.is_some()
+                    {
+                        self.dirty = true;
+                    }
+                } else {
+                    self.error = None;
+                    self.mouse(mouse);
+                    self.dirty = true;
+                }
             }
             Event::Paste(text) => {
                 self.error = None;
                 self.paste(&text);
+                self.dirty = true;
             }
-            Event::FocusGained => self.focus_changed(true),
-            Event::FocusLost => self.focus_changed(false),
-            Event::Resize(cols, rows) => self.fit(Rect::new(0, 0, cols, rows)),
+            Event::FocusGained => {
+                self.focus_changed(true);
+                self.dirty = true;
+            }
+            Event::FocusLost => {
+                self.focus_changed(false);
+                self.dirty = true;
+            }
+            Event::Resize(cols, rows) => {
+                self.fit(Rect::new(0, 0, cols, rows));
+                self.dirty = true;
+            }
         }
-        self.dirty = true;
     }
 
     fn paste(&mut self, text: &str) {

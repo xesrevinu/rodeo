@@ -842,3 +842,97 @@ fn a_draw_before_the_resize_event_fits_the_shrunk_screen() {
         assert_eq!(h.app().screen, ratatui::layout::Rect::new(0, 0, 159, 40));
     });
 }
+
+#[test]
+fn idle_ticks_noop_moves_and_hidden_output_do_not_dirty_the_screen() {
+    run(|| async {
+        let mut h = Harness::start().await;
+        h.ready().await;
+        h.screen();
+        assert!(!h.app().dirty);
+
+        h.app_mut().handle(rodeo::app::Msg::Tick);
+        assert!(!h.app().dirty, "idle tick must not trigger redraw");
+
+        let hit = h.app().hits.panes[0].content;
+        h.app_mut()
+            .handle(rodeo::app::Msg::Host(crossterm::event::Event::Mouse(
+                crossterm::event::MouseEvent {
+                    kind: MouseEventKind::Moved,
+                    column: hit.x,
+                    row: hit.y,
+                    modifiers: KeyModifiers::NONE,
+                },
+            )));
+        assert!(!h.app().dirty, "no-op mouse move must not trigger redraw");
+
+        let addr = h.focused_address().expect("an address");
+        let attach = h.app().panes.get(&addr).expect("pane").attach;
+        h.app_mut().panes.get_mut(&addr).expect("pane").shown = false;
+        h.app_mut().handle(rodeo::app::Msg::Output {
+            address: addr.clone(),
+            attach,
+            output: Some(hc::Output::Bytes(b"hidden".as_slice().into())),
+        });
+        assert!(
+            !h.app().dirty,
+            "hidden pane output without events must not trigger redraw"
+        );
+    });
+}
+
+#[test]
+fn hidden_tabs_attach_lazily_when_switched_to() {
+    run(|| async {
+        let mut h = Harness::with_config("[ui]\nprompt_new_tab_name = false\n").await;
+        h.ready().await;
+        let first_tab = h.doc().spaces[0].tabs[0].id.clone();
+        // Create an outside terminal and insert a second hidden tab into the doc directly.
+        let extra = h
+            .outside
+            .run(&hc::RunParams {
+                argv: vec!["sh".into(), "-c".into(), "echo lazy-ok; exec sleep 60".into()],
+                keep: true,
+                ..hc::RunParams::default()
+            })
+            .await
+            .expect("an extra terminal");
+        let (mut updated, version) = h.stored().await;
+        let tab_id = "tab-lazy".to_owned();
+        let tab = doc::Tab {
+            id: tab_id.clone(),
+            name: "lazy".to_owned(),
+            root: doc::Node::terminal("pane-lazy", &extra.address),
+        };
+        updated
+            .new_tab(&updated.spaces[0].id.clone(), tab, None)
+            .expect("tab");
+        h.outside
+            .doc_set(doc::NAME, &updated.to_value(), version, None)
+            .await
+            .expect("doc set");
+        h.until("the hidden pane is registered", |h| {
+            h.app().panes.contains(&extra.address)
+        })
+        .await;
+        assert_eq!(
+            h.app().view.active_tab(&h.app().machines).as_deref(),
+            Some(first_tab.as_str())
+        );
+        assert_eq!(
+            h.app().panes.get(&extra.address).expect("hidden pane").link,
+            rodeo::panes::Link::Idle,
+            "hidden tab must stay idle until shown"
+        );
+        h.app_mut().focus_tab(&tab_id);
+        h.until("switching attaches and renders the hidden tab", |h| {
+            h.app()
+                .panes
+                .get(&extra.address)
+                .is_some_and(|p| p.link == rodeo::panes::Link::Attached)
+                && h.screen().contains("lazy-ok")
+        })
+        .await;
+        let _ = h.outside.kill(&extra.address).await;
+    });
+}

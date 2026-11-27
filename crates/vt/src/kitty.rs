@@ -27,6 +27,8 @@ pub struct Placement {
     pub image: u32,
     pub placement: u32,
     pub image_generation: u64,
+    pub image_width: u32,
+    pub image_height: u32,
     pub z: i32,
     pub col: i32,
     pub row: i32,
@@ -92,6 +94,8 @@ impl Terminal {
                 image: id,
                 placement: current.placement_id().unwrap_or(0),
                 image_generation: image.generation().unwrap_or(0),
+                image_width: image.width().unwrap_or(0),
+                image_height: image.height().unwrap_or(0),
                 z: current.z().unwrap_or(0),
                 col: info.viewport_col,
                 row: info.viewport_row,
@@ -112,6 +116,14 @@ impl Terminal {
             generation,
             placements,
         }
+    }
+
+    pub fn has_image(&self, id: u32) -> bool {
+        self.vt()
+            .kitty_graphics()
+            .ok()
+            .and_then(|storage| storage.image(id))
+            .is_some()
     }
 
     pub fn image(&self, id: u32) -> Option<Image> {

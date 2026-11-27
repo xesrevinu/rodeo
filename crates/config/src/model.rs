@@ -128,8 +128,8 @@ impl Default for UpdateConfig {
     fn default() -> Self {
         Self {
             channel: UpdateChannel::Stable,
-            version_check: true,
-            manifest_check: true,
+            version_check: false,
+            manifest_check: false,
         }
     }
 }

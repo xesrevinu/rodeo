@@ -76,6 +76,8 @@ impl App {
         self.conn.state = State::Online;
         self.conn.error = None;
         self.conn.backoff = Duration::ZERO;
+        self.layout_dirty = true;
+        self.dirty = true;
         for machine in self.machines.iter_mut() {
             machine.slot.reset();
         }
@@ -166,6 +168,7 @@ impl App {
                     m.slot.doc_event(version);
                     self.pump(machine.as_deref());
                 }
+                self.dirty = true;
             }
             Update::Reset => {
                 for machine in self.machines.iter_mut() {
@@ -174,6 +177,7 @@ impl App {
                 self.pump_all();
                 self.sync_panes();
                 self.reconcile();
+                self.dirty = true;
             }
             Update::Changed(address) => {
                 if restarted.as_deref() == Some(address.as_str()) {
@@ -182,8 +186,12 @@ impl App {
                 if !titled {
                     self.reconcile();
                 }
+                self.dirty = true;
             }
-            Update::Removed(_) => self.reconcile(),
+            Update::Removed(_) => {
+                self.reconcile();
+                self.dirty = true;
+            }
         }
     }
 
@@ -206,6 +214,8 @@ impl App {
         self.launching.clear();
         self.killing.clear();
         self.written_where.clear();
+        self.layout_dirty = true;
+        self.dirty = true;
         self.schedule_retry();
     }
 
@@ -242,7 +252,7 @@ impl App {
         let Some(client) = self.client() else {
             return;
         };
-        self.spawn(async move {
+        self.spawn_quiet(async move {
             let result = client.machines().await;
             move |app: &mut App| app.machines_listed(result)
         });
@@ -251,6 +261,9 @@ impl App {
     pub fn machines_listed(&mut self, result: Result<Vec<hc::MachineView>, hc::HcError>) {
         match result {
             Ok(views) => {
+                if views == self.machines.views() {
+                    return;
+                }
                 let changed = self.machines.update(views);
                 for machine in changed {
                     self.pump(machine.as_deref());

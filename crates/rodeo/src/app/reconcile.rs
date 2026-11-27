@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::rc::Rc;
 use std::time::{Duration, Instant};
 
@@ -30,7 +31,7 @@ impl App {
     }
 
     fn adopt_orphans(&mut self) {
-        let shown: Vec<String> = self.machines.panes().filter_map(|p| p.address()).collect();
+        let shown: HashSet<String> = self.machines.panes().filter_map(|p| p.address()).collect();
         let now = now_ms();
         let mut orphans = Vec::new();
         for terminal in self.terminals.iter() {
@@ -208,7 +209,7 @@ impl App {
             }
             self.written_where.insert(address.clone(), place.clone());
             let client = client.clone();
-            self.spawn(async move {
+            self.spawn_quiet(async move {
                 let result = client.label(&address, [(WHERE, place.as_str())]).await;
                 move |app: &mut App| {
                     if let Err(error) = result {
@@ -253,7 +254,7 @@ impl App {
         if agents::seen_turn(terminal).is_some_and(|seen| seen >= turn) {
             return;
         }
-        self.spawn(async move {
+        self.spawn_quiet(async move {
             let result = client.label(&address, [(SEEN, turn.to_string())]).await;
             move |app: &mut App| {
                 if let Err(error) = result {
