@@ -97,6 +97,8 @@ impl App {
             spawn.tab.clone(),
         );
         self.launching.insert(guard.clone());
+        let fallback_shell =
+            spawn.machine.is_some() && !spawn.argv.is_empty() && spawn.argv == self.shell_argv();
         let params = RunParams {
             argv: spawn.argv,
             size: Some(Size {
@@ -116,7 +118,16 @@ impl App {
         };
         let machine = spawn.machine;
         self.spawn(async move {
-            let result = client.run(&params).await;
+            let mut result = client.run(&params).await;
+            if fallback_shell
+                && result
+                    .as_ref()
+                    .is_err_and(|e| e.to_string().contains("cannot start"))
+            {
+                let mut retry = params;
+                retry.argv.clear();
+                result = client.run(&retry).await;
+            }
             move |app: &mut App| {
                 app.launching.remove(&guard);
                 let result = result.map_err(|e| e.to_string()).map(|terminal| {
